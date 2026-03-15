@@ -15,9 +15,16 @@ export default function InternalChat({ isOpen, onClose }) {
 
         fetchMessages()
 
-        // Subscribe to real-time changes
-        const channel = supabase.channel('public:messages')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        // Subscribe to real-time changes (scoped to this org when possible)
+        const channelName = user?.organization_id
+            ? `messages:org:${user.organization_id}`
+            : 'public:messages'
+        const filter = user?.organization_id
+            ? { event: 'INSERT', schema: 'public', table: 'messages', filter: `organization_id=eq.${user.organization_id}` }
+            : { event: 'INSERT', schema: 'public', table: 'messages' }
+
+        const channel = supabase.channel(channelName)
+            .on('postgres_changes', filter, () => {
                 fetchMessages() // Refresh to get the joins (sender profile)
             })
             .subscribe()
@@ -25,7 +32,7 @@ export default function InternalChat({ isOpen, onClose }) {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [isOpen])
+    }, [isOpen, user?.organization_id])
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -35,7 +42,7 @@ export default function InternalChat({ isOpen, onClose }) {
         const { data, error } = await supabase
             .from('messages')
             .select(`
-                id, content, created_at,
+                id, sender_id, content, created_at,
                 profiles:sender_id ( full_name, role, title )
             `)
             .order('created_at', { ascending: true })
@@ -106,10 +113,7 @@ export default function InternalChat({ isOpen, onClose }) {
                         </div>
                     )}
                     {messages.map(msg => {
-                        const isMe = msg.profiles?.full_name === user?.name || true // Fallback check
-
-                        // We actually check ID if possible
-                        const genuinelyMe = true; // Simulating check for UI
+                        const genuinelyMe = msg.sender_id === user?.id
 
                         return (
                             <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: genuinelyMe ? 'flex-end' : 'flex-start' }}>

@@ -1,23 +1,41 @@
 /**
- * Fleet Map — interactive vehicle locations using OpenStreetMap / Leaflet
- * Falls back to a styled static mock when Leaflet isn't loaded.
- * For demo: shows all 6 mock vehicles on a map with status badges.
+ * Fleet Map — live vehicle positions
+ *
+ * Data priority:
+ *   1. Samsara GPS (real lat/lng) when token is configured
+ *   2. Supabase `vehicles` table (updated by Samsara webhook or manual dispatch)
+ *   3. Mock data fallback
+ *
+ * Realtime: subscribes to Supabase `vehicles` changes so position/status
+ * updates from any source (webhook, office edit) are reflected instantly.
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import GlassCard from '../components/ui/GlassCard'
-import { mockFleet } from '../data/mockData'
-import { Truck, MapPin, Wifi, WifiOff } from 'lucide-react'
+import { useFleetData } from '../context/FleetContext'
+import { supabase } from '../services/supabase'
+import { useAuth } from '../context/AuthContext'
+import { Truck, Wifi, WifiOff } from 'lucide-react'
 
 const STATUS_COLORS = {
-    active: { dot: '#22d3a8', label: 'En Route', bg: 'rgba(34,211,168,0.12)' },
-    rest: { dot: '#3b8ef3', label: 'Rest Stop', bg: 'rgba(59,142,243,0.12)' },
+    active:      { dot: '#22d3a8', label: 'En Route',    bg: 'rgba(34,211,168,0.12)' },
+    rest:        { dot: '#3b8ef3', label: 'Rest Stop',   bg: 'rgba(59,142,243,0.12)' },
     maintenance: { dot: '#ef4444', label: 'Maintenance', bg: 'rgba(239,68,68,0.12)' },
-    idle: { dot: '#f59e0b', label: 'Idle', bg: 'rgba(245,158,11,0.12)' },
+    idle:        { dot: '#f59e0b', label: 'Idle',        bg: 'rgba(245,158,11,0.12)' },
 }
 
-// Mock GPS positions spread across the US
-const POSITIONS = {
+// Convert WGS-84 lat/lng to approximate % position on the SVG US map.
+// US mainland bounding box: lat 24-49, lng -125 to -66
+function latLngToPos(lat, lng) {
+    const clampedLat = Math.max(24, Math.min(49, lat))
+    const clampedLng = Math.max(-125, Math.min(-66, lng))
+    const left = ((clampedLng + 125) / 59) * 82 + 7   // 7%-89%
+    const top  = ((49 - clampedLat) / 25) * 70 + 15   // 15%-85%
+    return { top: `${top.toFixed(1)}%`, left: `${left.toFixed(1)}%` }
+}
+
+// Static fallback positions for mock trucks (no GPS data)
+const MOCK_POSITIONS = {
     'TRK-001': { top: '52%', left: '52%' },
     'TRK-002': { top: '60%', left: '34%' },
     'TRK-003': { top: '58%', left: '14%' },
@@ -29,14 +47,62 @@ const POSITIONS = {
 const pv = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0 } }
 
 export default function FleetMap() {
+    const { fleet: samsaraFleet, isLive } = useFleetData()
+    const { user } = useAuth()
     const [selected, setSelected] = useState(null)
-    const selectedVehicle = mockFleet.find(v => v.id === selected)
+
+    // Supabase vehicles layer — patches status/fuel/lat/lng via Realtime
+    const [dbVehicles, setDbVehicles] = useState({})
+
+    useEffect(() => {
+        if (!user?.organization_id) return
+
+        const fetchDbVehicles = async () => {
+            const { data } = await supabase
+                .from('vehicles')
+                .select('id, status, fuel_level, lat, lng')
+                .eq('organization_id', user.organization_id)
+            if (data) {
+                const map = {}
+                data.forEach(v => { map[v.id] = v })
+                setDbVehicles(map)
+            }
+        }
+
+        fetchDbVehicles()
+
+        const channel = supabase
+            .channel(`vehicles:map:${user.organization_id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'vehicles',
+                    filter: `organization_id=eq.${user.organization_id}`,
+                },
+                payload => {
+                    const v = payload.new ?? payload.old
+                    if (!v?.id) return
+                    setDbVehicles(prev => ({ ...prev, [v.id]: { ...prev[v.id], ...v } }))
+                }
+            )
+            .subscribe()
+
+        return () => supabase.removeChannel(channel)
+    }, [user?.organization_id])
+
+    // Samsara fleet is authoritative for GPS; DB layer patches status/fuel
+    const fleet = samsaraFleet.map(truck => ({
+        ...truck,
+        ...(dbVehicles[truck.id] ?? {}),
+    }))
 
     const counts = {
-        active: mockFleet.filter(v => v.status === 'active').length,
-        rest: mockFleet.filter(v => v.status === 'rest').length,
-        maintenance: mockFleet.filter(v => v.status === 'maintenance').length,
-        idle: mockFleet.filter(v => v.status === 'idle').length,
+        active:      fleet.filter(v => v.status === 'active').length,
+        rest:        fleet.filter(v => v.status === 'rest').length,
+        maintenance: fleet.filter(v => v.status === 'maintenance').length,
+        idle:        fleet.filter(v => v.status === 'idle').length,
     }
 
     return (
@@ -45,11 +111,13 @@ export default function FleetMap() {
             <div style={{ marginBottom: 20 }}>
                 <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 4 }}>Fleet Map</h1>
                 <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                    Live vehicle positions · Updated every 30 seconds via Samsara GPS
+                    {isLive
+                        ? 'Live vehicle positions · Samsara GPS + Supabase Realtime'
+                        : 'Demo data · Connect Samsara in Settings for live GPS'}
                 </p>
             </div>
 
-            {/* Status summary pills */}
+            {/* Status pills */}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
                 {Object.entries(counts).map(([status, count]) => {
                     const s = STATUS_COLORS[status]
@@ -74,11 +142,10 @@ export default function FleetMap() {
                         background: 'linear-gradient(180deg, #0a1628 0%, #0f1f3d 100%)',
                         overflow: 'hidden',
                     }}>
-                        {/* US map outline (SVG-based simplified) */}
+                        {/* US outline */}
                         <svg viewBox="0 0 960 600" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.15 }}>
                             <path d="M200,120 L760,120 L780,200 L820,280 L800,400 L700,460 L580,480 L400,470 L250,430 L160,350 L140,260 Z"
                                 fill="none" stroke="rgba(59,142,243,0.6)" strokeWidth="1.5" />
-                            {/* Major highways */}
                             <line x1="200" y1="300" x2="760" y2="300" stroke="rgba(59,142,243,0.2)" strokeWidth="1" strokeDasharray="8,6" />
                             <line x1="480" y1="120" x2="480" y2="480" stroke="rgba(59,142,243,0.2)" strokeWidth="1" strokeDasharray="8,6" />
                             <line x1="200" y1="200" x2="760" y2="400" stroke="rgba(59,142,243,0.1)" strokeWidth="1" strokeDasharray="6,8" />
@@ -93,12 +160,12 @@ export default function FleetMap() {
 
                         {/* City labels */}
                         {[
-                            { name: 'Chicago', top: '38%', left: '53%' },
-                            { name: 'Dallas', top: '65%', left: '44%' },
-                            { name: 'Atlanta', top: '62%', left: '62%' },
-                            { name: 'Denver', top: '48%', left: '30%' },
-                            { name: 'Los Angeles', top: '56%', left: '9%' },
-                            { name: 'Houston', top: '72%', left: '45%' },
+                            { name: 'Chicago',     top: '38%', left: '53%' },
+                            { name: 'Dallas',      top: '65%', left: '44%' },
+                            { name: 'Atlanta',     top: '62%', left: '62%' },
+                            { name: 'Denver',      top: '48%', left: '30%' },
+                            { name: 'Los Angeles', top: '56%', left: '9%'  },
+                            { name: 'Houston',     top: '72%', left: '45%' },
                         ].map(city => (
                             <div key={city.name} style={{
                                 position: 'absolute', top: city.top, left: city.left,
@@ -111,9 +178,12 @@ export default function FleetMap() {
                         ))}
 
                         {/* Vehicle pins */}
-                        {mockFleet.map(vehicle => {
-                            const pos = POSITIONS[vehicle.id]
-                            const s = STATUS_COLORS[vehicle.status]
+                        {fleet.map(vehicle => {
+                            const hasGps = vehicle.lat && vehicle.lng
+                            const pos = hasGps
+                                ? latLngToPos(vehicle.lat, vehicle.lng)
+                                : (MOCK_POSITIONS[vehicle.id] ?? { top: '50%', left: '50%' })
+                            const s = STATUS_COLORS[vehicle.status] ?? STATUS_COLORS.idle
                             const isSelected = selected === vehicle.id
                             return (
                                 <motion.button
@@ -127,11 +197,10 @@ export default function FleetMap() {
                                         background: 'none', border: 'none', cursor: 'pointer', zIndex: 10,
                                     }}
                                 >
-                                    {/* Pulse ring for active */}
                                     {vehicle.status === 'active' && (
                                         <div style={{
-                                            position: 'absolute', inset: -8,
-                                            borderRadius: '50%', border: `2px solid ${s.dot}`,
+                                            position: 'absolute', inset: -8, borderRadius: '50%',
+                                            border: `2px solid ${s.dot}`,
                                             animation: 'ring-pulse 2s infinite',
                                         }} />
                                     )}
@@ -145,7 +214,6 @@ export default function FleetMap() {
                                     }}>
                                         <Truck size={isSelected ? 18 : 14} color={s.dot} />
                                     </div>
-                                    {/* ID label */}
                                     <div style={{
                                         position: 'absolute', top: '110%', left: '50%',
                                         transform: 'translateX(-50%)', whiteSpace: 'nowrap',
@@ -174,23 +242,31 @@ export default function FleetMap() {
                             ))}
                         </div>
 
-                        {/* Live badge */}
+                        {/* Live / Demo badge */}
                         <div style={{
                             position: 'absolute', top: 16, right: 16, display: 'flex', alignItems: 'center', gap: 6,
-                            padding: '6px 12px', background: 'rgba(34,211,168,0.1)',
-                            border: '1px solid rgba(34,211,168,0.3)', borderRadius: 20,
+                            padding: '6px 12px',
+                            background: isLive ? 'rgba(34,211,168,0.1)' : 'rgba(245,158,11,0.1)',
+                            border: `1px solid ${isLive ? 'rgba(34,211,168,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                            borderRadius: 20,
                         }}>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22d3a8', animation: 'ring-pulse 2s infinite' }} />
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#22d3a8' }}>LIVE</span>
-                            <Wifi size={11} color="#22d3a8" />
+                            <div style={{
+                                width: 6, height: 6, borderRadius: '50%',
+                                background: isLive ? '#22d3a8' : '#f59e0b',
+                                animation: isLive ? 'ring-pulse 2s infinite' : 'none',
+                            }} />
+                            <span style={{ fontSize: 11, fontWeight: 700, color: isLive ? '#22d3a8' : '#f59e0b' }}>
+                                {isLive ? 'LIVE' : 'DEMO'}
+                            </span>
+                            {isLive ? <Wifi size={11} color="#22d3a8" /> : <WifiOff size={11} color="#f59e0b" />}
                         </div>
                     </div>
                 </GlassCard>
 
                 {/* Vehicle list panel */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {mockFleet.map(vehicle => {
-                        const s = STATUS_COLORS[vehicle.status]
+                    {fleet.map(vehicle => {
+                        const s = STATUS_COLORS[vehicle.status] ?? STATUS_COLORS.idle
                         const isSelected = selected === vehicle.id
                         return (
                             <motion.div
@@ -213,15 +289,15 @@ export default function FleetMap() {
                                     {vehicle.driver}
                                 </div>
                                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, paddingLeft: 18 }}>
-                                    {vehicle.route} · Fuel {vehicle.fuel}%
+                                    {vehicle.route ?? '—'} · Fuel {vehicle.fuel ?? vehicle.fuel_level ?? '?'}%
                                 </div>
                                 {isSelected && (
                                     <div style={{ marginTop: 10, paddingLeft: 18 }}>
                                         <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
-                                            <div style={{ height: '100%', width: `${vehicle.progress}%`, background: s.dot, borderRadius: 2 }} />
+                                            <div style={{ height: '100%', width: `${vehicle.progress ?? 0}%`, background: s.dot, borderRadius: 2 }} />
                                         </div>
                                         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                                            {vehicle.progress}% complete · {vehicle.lastUpdate}
+                                            {vehicle.progress ?? 0}% complete · {vehicle.lastUpdate ?? 'recently updated'}
                                         </div>
                                     </div>
                                 )}
