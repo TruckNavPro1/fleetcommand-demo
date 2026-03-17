@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { RoleProvider } from './context/RoleContext'
 import { SamsaraProvider } from './context/SamsaraContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -77,7 +77,7 @@ export default function App() {
                                     style: { background: 'var(--bg-glass)', backdropFilter: 'blur(10px)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '13px', fontWeight: 600 }
                                 }}
                             />
-                            <BrowserRouter>
+                            <HashRouter>
                                 <Routes>
                                     {/* Public — guests only */}
                                     <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
@@ -116,7 +116,7 @@ export default function App() {
                                     {/* Catch-all */}
                                     <Route path="*" element={<Navigate to="/login" replace />} />
                                 </Routes>
-                            </BrowserRouter>
+                            </HashRouter>
                         </PhoneProvider>
                     </SamsaraProvider>
                 </RoleProvider>
