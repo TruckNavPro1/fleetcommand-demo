@@ -78,6 +78,7 @@ body {
   background: var(--bg-base);
   color: var(--text-primary);
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1501,6 +1502,7 @@ textarea {
    LOGIN PAGE
    ──────────────────────────────────────────── */
 .login-page {
+  min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   align-items: center;
@@ -1836,10 +1838,84 @@ textarea {
   color: var(--accent-red);
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
+
+  /* Login fixes */
   .login-container {
     padding: 28px 20px 24px;
     margin: auto;
+  }
+
+  /* App Shell */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform var(--transition-base);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: none;
+  }
+
+  .sidebar-overlay.visible {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 95;
+    animation: fadeIn 0.3s ease forwards;
+  }
+
+  .main-content {
+    margin-left: 0;
+  }
+
+  .header {
+    left: 0;
+    padding: 0 16px;
+  }
+
+  .page-body {
+    padding: 16px;
+  }
+
+  /* Grids to single column */
+  .grid-2,
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Header adjustments */
+  .header-search {
+    display: none;
+  }
+
+  .role-switcher {
+    display: none;
+  }
+
+  .header-title p {
+    display: none;
+  }
+
+  .mobile-menu-btn {
+    display: flex !important;
+    margin-right: 8px;
+    color: var(--text-primary);
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1851,7 +1927,24 @@ textarea {
 
   .login-container {
     margin: auto;
-    /* Fallback to keep centered if space permits, otherwise start at top */
+  }
+}
+
+/* Hide mobile menu button by default on desktop */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }
 
