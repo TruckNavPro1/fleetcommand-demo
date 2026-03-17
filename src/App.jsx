@@ -7,6 +7,7 @@ import { Toaster } from 'react-hot-toast'
 import ErrorBoundary from './components/ErrorBoundary'
 import AppShell from './components/layout/AppShell'
 import LoginPage from './pages/LoginPage'
+import SignupPage from './pages/SignupPage'
 import Overview from './pages/Overview'
 import DriverDashboard from './pages/DriverDashboard'
 import MechanicDashboard from './pages/MechanicDashboard'
@@ -22,6 +23,7 @@ import DriverRoster from './pages/DriverRoster'
 import Compliance from './pages/Compliance'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import Billing from './pages/Billing'
 
 // Gate: redirect to /login if not authenticated
 function RequireAuth({ children }) {
@@ -79,6 +81,7 @@ export default function App() {
                                 <Routes>
                                     {/* Public — guests only */}
                                     <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
+                                    <Route path="/signup" element={<GuestOnly><SignupPage /></GuestOnly>} />
 
                                     {/* Protected — all authenticated roles */}
                                     <Route element={<RequireAuth><AppShell /></RequireAuth>}>
@@ -104,6 +107,7 @@ export default function App() {
                                         <Route path="/analytics" element={<RequireAdmin><Analytics /></RequireAdmin>} />
                                         <Route path="/compliance" element={<RequireAdmin><Compliance /></RequireAdmin>} />
                                         <Route path="/reports" element={<RequireAdmin><Reports /></RequireAdmin>} />
+                                        <Route path="/billing" element={<RequireAdmin><Billing /></RequireAdmin>} />
 
                                         {/* Settings — available to all authenticated roles */}
                                         <Route path="/settings" element={<Settings />} />

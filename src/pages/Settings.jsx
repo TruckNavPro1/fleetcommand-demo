@@ -93,19 +93,21 @@ export default function Settings() {
     const { isLive, refresh } = useFleetData()
     const s = t('settings', { returnObjects: true })
 
-    // Samsara integration
-    const [samsaraToken, setSamsaraToken] = useState(() => localStorage.getItem('samsara_token') || '')
-    const [samsaraSaved, setSamsaraSaved] = useState(false)
+    // Telematics integration
+    const [eldProvider, setEldProvider] = useState(() => localStorage.getItem('eld_provider') || 'samsara')
+    const [eldToken, setEldToken] = useState(() => localStorage.getItem('eld_token') || '')
+    const [eldSaved, setEldSaved] = useState(false)
 
-    const saveSamsaraToken = () => {
-        if (samsaraToken.trim()) {
-            localStorage.setItem('samsara_token', samsaraToken.trim())
+    const saveEldConfig = () => {
+        localStorage.setItem('eld_provider', eldProvider)
+        if (eldToken.trim()) {
+            localStorage.setItem('eld_token', eldToken.trim())
         } else {
-            localStorage.removeItem('samsara_token')
+            localStorage.removeItem('eld_token')
         }
         refresh()
-        setSamsaraSaved(true)
-        setTimeout(() => setSamsaraSaved(false), 2500)
+        setEldSaved(true)
+        setTimeout(() => setEldSaved(false), 2500)
     }
 
     // Google Maps integration
@@ -149,7 +151,12 @@ export default function Settings() {
     const [tgTestSent, setTgTestSent] = useState(false)
 
     const saveTgChatId = () => {
-        localStorage.setItem('fc_tg_chatid', tgChatId)
+        const chat_id = tgChatId.trim();
+        if (chat_id) {
+            localStorage.setItem('fc_tg_chatid', chat_id)
+        } else {
+            localStorage.removeItem('fc_tg_chatid')
+        }
     }
 
     // VoIP state
@@ -160,10 +167,20 @@ export default function Settings() {
     const [voipSaved, setVoipSaved] = useState(false)
 
     const saveVoipConfig = () => {
-        localStorage.setItem('fc_voip_provider', voipProvider)
-        localStorage.setItem('fc_voip_sid', voipSid)
-        localStorage.setItem('fc_voip_token', voipToken)
-        localStorage.setItem('fc_voip_callerid', voipCallerId)
+        const provider = voipProvider.trim();
+        const sid = voipSid.trim();
+        const token = voipToken.trim();
+        const callerid = voipCallerId.trim();
+
+        if (provider) localStorage.setItem('fc_voip_provider', provider)
+        else localStorage.removeItem('fc_voip_provider')
+        if (sid) localStorage.setItem('fc_voip_sid', sid)
+        else localStorage.removeItem('fc_voip_sid')
+        if (token) localStorage.setItem('fc_voip_token', token)
+        else localStorage.removeItem('fc_voip_token')
+        if (callerid) localStorage.setItem('fc_voip_callerid', callerid)
+        else localStorage.removeItem('fc_voip_callerid')
+
         setVoipSaved(true)
         setTimeout(() => setVoipSaved(false), 2500)
     }
@@ -228,6 +245,7 @@ export default function Settings() {
             const newKeys = { ...integrationKeys, [activeIntegration.name]: tempKey }
             setIntegrationKeys(newKeys)
             localStorage.setItem('fc_integrations', JSON.stringify(newKeys))
+
             toast.success(`${activeIntegration.name} connected successfully!`, { id: loadingToast })
             setActiveIntegration(null)
         }, 1500)
@@ -358,35 +376,53 @@ export default function Settings() {
                 </motion.button>
             </Section>
 
-            {/* Integrations — Samsara */}
-            <Section icon={Zap} title="Integrations" desc="Connect FleetCommand to Samsara for live GPS, HOS, and safety data" accentColor="#22d3a8">
+            {/* Telematics Integration */}
+            <Section icon={Zap} title="Telematics Integration" desc="Connect FleetCommand to your ELD provider for live GPS, HOS, and safety data" accentColor="#22d3a8">
                 <div style={{ padding: '10px 14px', background: isLive ? 'rgba(34,211,168,0.06)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isLive ? 'rgba(34,211,168,0.2)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: isLive ? '#22d3a8' : '#3b8ef3', display: 'inline-block', flexShrink: 0 }} />
                     <span style={{ fontSize: 12, color: isLive ? '#22d3a8' : 'var(--text-secondary)', fontWeight: 600 }}>
-                        {isLive ? '🟢 Connected — Live fleet data active' : '🔵 Demo Mode — Enter token to enable live data'}
+                        {isLive ? `🟢 Connected — Live fleet data active (${eldProvider})` : `🔵 Demo Mode — Enter ${eldProvider} token to enable live data`}
                     </span>
                 </div>
+
+                <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}>Telematics Provider</label>
+                    <select
+                        value={eldProvider}
+                        onChange={e => setEldProvider(e.target.value)}
+                        style={{
+                            width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 10, padding: '10px 14px', color: 'var(--text-primary)', fontSize: 13, outline: 'none',
+                            appearance: 'none', marginBottom: 14
+                        }}
+                    >
+                        <option value="samsara" style={{ color: 'black' }}>Samsara</option>
+                        <option value="motive" style={{ color: 'black' }}>Motive (KeepTruckin)</option>
+                        <option value="geotab" style={{ color: 'black' }}>Geotab</option>
+                    </select>
+                </div>
+
                 <InputField
-                    label="Samsara API Token"
-                    value={samsaraToken}
-                    onChange={setSamsaraToken}
+                    label={`${eldProvider.charAt(0).toUpperCase() + eldProvider.slice(1)} API Token`}
+                    value={eldToken}
+                    onChange={setEldToken}
                     type="password"
-                    placeholder="Paste your Samsara API token here"
+                    placeholder="Paste your API token here"
                 />
                 <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 14, marginTop: -6, lineHeight: 1.6 }}>
-                    Found in Samsara Dashboard → Settings → API Tokens. Stored locally in your browser only — never sent to any server.
+                    Stored locally in your browser only — never sent to any server.
                 </p>
                 <motion.button
-                    onClick={saveSamsaraToken}
+                    onClick={saveEldConfig}
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                     style={{
                         display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px',
                         borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13,
-                        background: samsaraSaved ? 'linear-gradient(135deg, #22d3a8, #059669)' : 'linear-gradient(135deg, #22d3a8, #3b8ef3)',
+                        background: eldSaved ? 'linear-gradient(135deg, #22d3a8, #059669)' : 'linear-gradient(135deg, #22d3a8, #3b8ef3)',
                         color: 'white', boxShadow: '0 6px 20px rgba(34,211,168,0.3)', transition: 'background 0.3s',
                     }}
                 >
-                    {samsaraSaved ? <><Check size={14} /> Saved & Refreshed</> : <><Zap size={14} /> Save & Connect</>}
+                    {eldSaved ? <><Check size={14} /> Saved & Refreshed</> : <><Zap size={14} /> Save & Connect</>}
                 </motion.button>
 
                 <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)' }}>

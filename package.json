@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@sentry/react": "^10.42.0",
+    "@stripe/stripe-js": "^8.10.0",
     "@supabase/supabase-js": "^2.98.0",
     "@vis.gl/react-google-maps": "^1.7.1",
     "framer-motion": "^11.0.0",

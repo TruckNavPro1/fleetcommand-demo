@@ -124,6 +124,50 @@ export function AuthProvider({ children }) {
         }
     }
 
+    const signup = async (email, password, { orgName, fullName }) => {
+        try {
+            setAuthLoading(true)
+            setLoginError('')
+
+            // 1. Create auth user
+            const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
+            if (authError) throw authError
+            if (!authData?.user) throw new Error("Signup failed.")
+
+            // 2. Create the Organization
+            const { data: orgData, error: orgError } = await supabase
+                .from('organizations')
+                .insert([{ name: orgName }])
+                .select()
+                .single()
+
+            if (orgError) throw orgError
+
+            // 3. Create the Profile associated with that org
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .insert([{
+                    id: authData.user.id,
+                    full_name: fullName,
+                    role: 'office',
+                    title: 'Owner/Admin',
+                    organization_id: orgData.id
+                }])
+
+            if (profileError) throw profileError
+
+            // Wait a moment for DB consistency, then ensure profile state is correct
+            await fetchProfile(authData.user)
+            return true
+
+        } catch (error) {
+            console.error("Signup error:", error)
+            setLoginError(error.message)
+            setAuthLoading(false)
+            return false
+        }
+    }
+
     const login = async (email, password) => {
         try {
             setLoginError('')
@@ -147,7 +191,7 @@ export function AuthProvider({ children }) {
     const isAdmin = user?.role === 'office'
 
     return (
-        <AuthContext.Provider value={{ user, authLoading, login, logout, demoLogin, loginError, setLoginError, isAdmin }}>
+        <AuthContext.Provider value={{ user, authLoading, login, signup, logout, demoLogin, loginError, setLoginError, isAdmin }}>
             {children}
         </AuthContext.Provider>
     )

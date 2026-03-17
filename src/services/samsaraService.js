@@ -11,10 +11,10 @@ const BASE_URL = 'https://api.samsara.com'
 
 // ── Token resolution: .env first, localStorage as fallback ───────
 export function getToken() {
-    return import.meta.env.VITE_SAMSARA_API_TOKEN || localStorage.getItem('samsara_token') || ''
+    return import.meta.env.VITE_SAMSARA_API_TOKEN || localStorage.getItem('eld_token') || ''
 }
 
-export function hasSamsaraToken() {
+export function hasToken() {
     return Boolean(getToken())
 }
 

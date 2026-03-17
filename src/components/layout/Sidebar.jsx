@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import {
     LayoutDashboard, Truck, Wrench, Building2, MapPin,
     AlertTriangle, FileText, Users, BarChart3, Settings,
-    ClipboardList, Fuel, Package, ShieldCheck
+    ClipboardList, Fuel, Package, ShieldCheck, CreditCard
 } from 'lucide-react'
 
 const navConfig = {
@@ -16,6 +16,7 @@ const navConfig = {
         { label: 'Analytics', icon: BarChart3, to: '/analytics' },
         { label: 'Compliance', icon: ShieldCheck, to: '/compliance' },
         { label: 'Reports', icon: FileText, to: '/reports' },
+        { label: 'Billing & Plan', icon: CreditCard, to: '/billing' },
         { label: 'Settings', icon: Settings, to: '/settings' },
     ],
     driver: [

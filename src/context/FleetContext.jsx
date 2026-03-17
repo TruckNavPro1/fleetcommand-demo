@@ -10,7 +10,7 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import {
-    hasSamsaraToken,
+    hasToken,
     getVehicles,
     getVehicleLocations,
     getVehicleStats,
@@ -20,7 +20,7 @@ import {
     getDVIRs,
     normalizeTruck,
     normalizeDriver,
-} from '../services/samsaraService'
+} from '../services/telematicsService'
 import {
     mockFleet,
     mockAlerts,
@@ -117,7 +117,7 @@ export function FleetProvider({ children }) {
 
     const fetchLive = useCallback(async () => {
         // Drivers and Demo modes are always frontend-only
-        if (!canAccessBackend || !hasSamsaraToken() || user?.isDemo) {
+        if (!canAccessBackend || !hasToken() || user?.isDemo) {
             setFleet(mockFleet)
             setAlerts(mockAlerts)
             setVehicleHealth(mockVehicleHealth)
@@ -191,18 +191,17 @@ export function FleetProvider({ children }) {
         }
 
         fetchLive()
-        if (hasSamsaraToken()) {
+        if (hasToken()) {
             pollRef.current = setInterval(fetchLive, POLL_INTERVAL)
         }
         return () => clearInterval(pollRef.current)
     }, [fetchLive, canAccessBackend])
 
-    // Called from Settings after token save
     const refresh = useCallback(() => {
         if (!canAccessBackend) return
         clearInterval(pollRef.current)
         fetchLive().then(() => {
-            if (hasSamsaraToken()) {
+            if (hasToken()) {
                 pollRef.current = setInterval(fetchLive, POLL_INTERVAL)
             }
         })

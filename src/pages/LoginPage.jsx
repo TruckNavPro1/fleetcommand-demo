@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Truck, Eye, EyeOff, ChevronRight, Lock, Zap } from 'lucide-react'
 
@@ -159,8 +160,12 @@ export default function LoginPage() {
                     </div>
                 </div>
 
+                <div style={{ marginTop: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Don't have a business account? <Link to="/signup" style={{ color: '#3b8ef3', fontWeight: 600, textDecoration: 'none' }}>Onboard now</Link>
+                </div>
+
                 <p className="login-footer">Internal use only · FleetCommand © {new Date().getFullYear()}</p>
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     )
 }
